@@ -1,5 +1,5 @@
 // Cambia la versión cada vez que actualices algún archivo de la app
-const CACHE = 'rcof-v2';
+const CACHE = 'rcof-v3';
 const FILES = [
   './', 'index.html', 'curriculum-data.js', 'app-config.js', 'prompt-builder.js',
   'manifest.json', 'icon-192.png', 'icon-512.png'

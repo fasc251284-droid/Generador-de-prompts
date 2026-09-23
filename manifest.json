@@ -1,6 +1,6 @@
 {
-  "name": "Generador de Prompts RCOF",
-  "short_name": "Prompts RCOF",
+  "name": "Generador de Prompts",
+  "short_name": "Prompts",
   "description": "Genera prompts docentes con metodología RCOF alineados al currículum chileno",
   "lang": "es-CL",
   "start_url": "./",
