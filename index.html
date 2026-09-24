@@ -114,6 +114,7 @@ body.con-barra main{padding-bottom:calc(var(--nav-h) + var(--bar-h) + var(--safe
 .opc{text-transform:none;letter-spacing:0;font-weight:500;font-family:var(--body)}
 .campo small{display:block;font-size:var(--t-xs);font-style:italic;color:var(--soft);margin-top:5px;line-height:1.4}
 .campo small.ctx{margin:-1px 0 6px}
+select[data-tipo]:has(option[value=""]:checked){color:var(--soft)}
 input[type=text],input[type=number],input[type=search],select,textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);
   padding:10px 11px;font-size:16px;font-weight:500;outline:none;-webkit-appearance:none;appearance:none}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b7383' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
@@ -1432,11 +1433,26 @@ function abrirDetalle(id){
       H.occ.push({ start:m.index, end:m.index + m[0].length, key });
     }
     H.campos = [...porEtiqueta.values()];
+    // Curso → Asignatura → OA primero, en ese orden; el resto como aparece en el prompt
+    const rango = c => ({ curso:0, asig:1, oa:2 }[tipoCurricular(c.key)] ?? 3);
+    H.campos = H.campos.map((c, n) => [c, n]).sort((a, b) => rango(a[0]) - rango(b[0]) || a[1] - b[1]).map(x => x[0]);
     const mem = ALM.get('campos', {});
     if (H.campos.length){
       html += `<h3 class="seccion">Completa los datos</h3>
         <p class="bajada" style="margin:-4px 0 12px">Lo que dejes vacío queda marcado en el prompt para completarlo después.</p>` +
         H.campos.map((c, i) => {
+          const tipo = tipoCurricular(c.key);
+          if (tipo){
+            const ini = esc(AUTOCOMPLETAR.has(c.key) ? (mem[c.key] || '') : '');
+            let aux = '';
+            // Si el prompt pide OA pero no curso o asignatura, se agregan selectores solo para listar los OA
+            if (tipo === 'oa'){
+              const tiene = t => H.campos.some(x => tipoCurricular(x.key) === t);
+              if (!tiene('curso')) aux += `<div class="campo"><label for="auxCurso">Curso <span class="opc">(para listar los OA)</span></label><select id="auxCurso" data-tipo="curso" data-ini="${esc(mem.curso || '')}"></select></div>`;
+              if (!tiene('asig')) aux += `<div class="campo"><label for="auxAsig">Asignatura <span class="opc">(para listar los OA)</span></label><select id="auxAsig" data-tipo="asig" data-ini="${esc(mem.asignatura || '')}"></select></div>`;
+            }
+            return `${aux}<div class="campo"><label for="f${i}">${esc(c.label)}</label><select id="f${i}" data-i="${i}" data-tipo="${tipo}" data-ini="${ini}"></select></div>`;
+          }
           const ops = c.opciones || [];
           const largo = !ops.length && /pegar|lista|describir|texto|contexto/i.test(c.raws[0]);
           const val = esc(AUTOCOMPLETAR.has(c.key) ? (mem[c.key] || '') : '');
@@ -1459,6 +1475,8 @@ function abrirDetalle(id){
       marcarOpciones(f); actualizarVista();
     }));
     $$('#hojaCuerpo [data-i]').forEach(marcarOpciones);
+    $$('#hojaCuerpo select[data-tipo]').forEach(s => s.addEventListener('change', () => cambioCurricular(s)));
+    refrescarCurriculares();
     actualizarVista();
   }
   mostrarHoja();
@@ -1467,6 +1485,57 @@ function abrirDetalle(id){
 function marcarOpciones(f){
   const g = document.querySelector(`.opciones[data-para="${f.id}"]`); if (!g) return;
   g.querySelectorAll('.chip').forEach(ch => { const on = ch.dataset.v === f.value; ch.classList.toggle('on', on); ch.setAttribute('aria-pressed', on); });
+}
+/* ---------- Listas desplegables de Curso, Asignatura y OA ---------- */
+function tipoCurricular(k){
+  if (['curso','nivel','nivel/curso','curso/nivel'].includes(k)) return 'curso';
+  if (['asignatura','asignatura/s','asignatura/area'].includes(k)) return 'asig';
+  if (k === 'oa' || k.startsWith('oa ') || k === 'tema/oa' || k === 'objetivo de aprendizaje') return 'oa';
+  return '';
+}
+const OTRO = '__otro';
+const NIVELES_ORD = () => Object.entries(appConfig.nivelMapping)
+  .sort((a,b) => (a[0].includes('medio') - b[0].includes('medio')) || parseInt(a[0]) - parseInt(b[0]));
+const ASIGS_TODAS = () => Object.entries(appConfig.asignaturaMapping)
+  .filter(([k]) => !k.startsWith('tp_') && objetivos[k])
+  .sort((a,b) => a[1].localeCompare(b[1], 'es'));
+const claveElegida = tipo => {
+  for (const s of $$(`#hojaCuerpo select[data-tipo="${tipo}"]`)){ const o = s.selectedOptions[0]; if (o && o.dataset.k) return o.dataset.k; }
+  return '';
+};
+function llenarSelect(s, primero, items){
+  const antes = s.value && s.value !== OTRO ? s.value : (s.dataset.ini || '');
+  s.innerHTML = `<option value="">${primero}</option>` +
+    items.map(([k, valor, texto]) => `<option value="${esc(valor)}" data-k="${esc(k)}">${esc(texto || valor)}</option>`).join('') +
+    `<option value="${OTRO}">Escribir otro…</option>`;
+  if (antes && items.some(x => x[1] === antes)) s.value = antes;
+  s.dataset.ini = '';
+}
+function refrescarCurriculares(){
+  $$('#hojaCuerpo select[data-tipo="curso"]').forEach(s => llenarSelect(s, 'Elige curso', NIVELES_ORD().map(([k, v]) => [k, v])));
+  const nivel = claveElegida('curso');
+  $$('#hojaCuerpo select[data-tipo="asig"]').forEach(s => {
+    const lista = ASIGS_TODAS().filter(([k]) => !nivel || (objetivos[k][nivel] && objetivos[k][nivel].length));
+    llenarSelect(s, 'Elige asignatura', lista.map(([k, v]) => [k, v]));
+  });
+  const asig = claveElegida('asig');
+  $$('#hojaCuerpo select[data-tipo="oa"]').forEach(s => {
+    const lista = (nivel && asig && objetivos[asig] && objetivos[asig][nivel]) || [];
+    const corto = o => o.length > 90 ? o.slice(0, 88) + '…' : o;
+    llenarSelect(s, lista.length ? 'Elige OA' : 'Primero elige curso y asignatura', lista.map(o => ['oa', o, corto(o)]));
+  });
+}
+function cambioCurricular(s){
+  if (s.value === OTRO){
+    // Cambia la lista por un campo de texto libre
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.id = s.id; inp.placeholder = 'Escribe aquí';
+    if (s.dataset.i !== undefined) inp.dataset.i = s.dataset.i;
+    s.replaceWith(inp); inp.focus();
+    inp.addEventListener('input', actualizarVista);
+  }
+  refrescarCurriculares();
+  actualizarVista();
 }
 function valoresCampos(){
   const vals = {};
