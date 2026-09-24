@@ -1,15 +1,15 @@
 {
-  "name": "Generador de Prompts",
-  "short_name": "Prompts",
-  "description": "Genera prompts docentes con metodología RCOF alineados al currículum chileno",
+  "name": "Generador de Prompts · Colegio Juan Pablo II",
+  "short_name": "Prompts JP2",
+  "description": "Prompts docentes con metodología RCOF y biblioteca de prompts del Colegio Juan Pablo II, Los Lagos.",
   "lang": "es-CL",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#667eea",
-  "theme_color": "#1e3c72",
+  "background_color": "#f4f8fa",
+  "theme_color": "#175f85",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
