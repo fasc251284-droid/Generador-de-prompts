@@ -1,7 +1,7 @@
 /* Generador de Prompts · Colegio Juan Pablo II
    Guarda la app en el teléfono para que abra sin conexión.
    Al publicar una versión nueva, sube el número de VERSION. */
-const VERSION = 'prompts-jp2-v1';
+const VERSION = 'prompts-jp2-v2';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
