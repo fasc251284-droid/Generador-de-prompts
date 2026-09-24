@@ -1326,7 +1326,8 @@ function generar(){
   const mem = ALM.get('campos', {});
   Object.assign(mem, { asignatura:d.asignatura, 'asignatura/s':d.asignatura, curso:d.nivel, nivel:d.nivel, 'nivel/curso':d.nivel, 'curso/nivel':d.nivel });
   if (d.unidad) Object.assign(mem, { tema:d.unidad, unidad:d.unidad, 'unidad/tema':d.unidad, 'contenido/tema':d.unidad });
-  if (d.oas.length === 1) Object.assign(mem, { oa:d.oas[0], objetivo:d.oas[0], 'tema/oa':d.oas[0] });
+  if (d.oas.length) Object.assign(mem, { oa:d.oas.join('; '), 'tema/oa':d.oas.join('; ') });
+  if (d.oas.length === 1) mem.objetivo = d.oas[0];
   ALM.set('campos', mem);
   abrirResultado(titulo, texto, 0);
 }
@@ -1451,6 +1452,13 @@ function abrirDetalle(id){
               if (!tiene('curso')) aux += `<div class="campo"><label for="auxCurso">Curso <span class="opc">(para listar los OA)</span></label><select id="auxCurso" data-tipo="curso" data-ini="${esc(mem.curso || '')}"></select></div>`;
               if (!tiene('asig')) aux += `<div class="campo"><label for="auxAsig">Asignatura <span class="opc">(para listar los OA)</span></label><select id="auxAsig" data-tipo="asig" data-ini="${esc(mem.asignatura || '')}"></select></div>`;
             }
+            if (tipo === 'oa') return `${aux}<div class="campo"><span class="lbl">${esc(c.label)} <span class="opc">(puedes elegir varios)</span></span>
+              <input type="hidden" id="f${i}" data-i="${i}" data-tipo="oa" data-ini="${ini}">
+              <input type="search" class="oa-filtro" data-filtro-para="f${i}" placeholder="Filtrar OA por palabra o número" aria-label="Filtrar objetivos" hidden style="margin-bottom:8px">
+              <div class="lista-oa" data-oa-para="f${i}"></div>
+              <div class="contador" data-cont-para="f${i}"></div>
+              <input type="text" data-extra-para="f${i}" placeholder="Otro OA o texto adicional (opcional)">
+            </div>`;
             return `${aux}<div class="campo"><label for="f${i}">${esc(c.label)}</label><select id="f${i}" data-i="${i}" data-tipo="${tipo}" data-ini="${ini}"></select></div>`;
           }
           const ops = c.opciones || [];
@@ -1519,11 +1527,43 @@ function refrescarCurriculares(){
     llenarSelect(s, 'Elige asignatura', lista.map(([k, v]) => [k, v]));
   });
   const asig = claveElegida('asig');
-  $$('#hojaCuerpo select[data-tipo="oa"]').forEach(s => {
-    const lista = (nivel && asig && objetivos[asig] && objetivos[asig][nivel]) || [];
-    const corto = o => o.length > 90 ? o.slice(0, 88) + '…' : o;
-    llenarSelect(s, lista.length ? 'Elige OA' : 'Primero elige curso y asignatura', lista.map(o => ['oa', o, corto(o)]));
-  });
+  $$('#hojaCuerpo input[data-tipo="oa"]').forEach(h => pintarOAMulti(h, (nivel && asig && objetivos[asig] && objetivos[asig][nivel]) || []));
+}
+/* OA de la biblioteca: selección múltiple con casillas, igual que en Crear */
+function pintarOAMulti(h, lista){
+  const firma = lista.length + '|' + (lista[0] || '');
+  if (!h._sel){ h._sel = new Set((h.dataset.ini || '').split('; ').filter(o => lista.includes(o))); h.dataset.ini = ''; }
+  if (h._firma !== firma){ h._sel = new Set([...h._sel].filter(o => lista.includes(o))); h._firma = firma; h._lista = lista; }
+  const cont = document.querySelector(`[data-oa-para="${h.id}"]`);
+  const filtro = document.querySelector(`[data-filtro-para="${h.id}"]`);
+  filtro.hidden = lista.length < 8;
+  const f = norm(filtro.value.trim());
+  const vis = lista.filter(o => !f || norm(o).includes(f) || h._sel.has(o));
+  cont.innerHTML = !lista.length
+    ? '<div class="vacio">Primero elige curso y asignatura.</div>'
+    : vis.length ? vis.map(o => {
+        const m = o.match(/^(OA\s*\d+[a-z]?|OA\s*[A-Z]+\s*\d*|AE\s*\d+)\s*[:.\-]\s*(.*)$/i);
+        const on = h._sel.has(o);
+        return `<button type="button" class="oa ${on ? 'on' : ''}" data-oa="${esc(o)}" aria-pressed="${on}">
+          <span class="chk">${ICON_CHECK}</span><span><b>${esc(m ? m[1] : 'Objetivo')}</b><span class="txt">${esc(m ? m[2] : o)}</span></span></button>`;
+      }).join('') : '<div class="vacio">Ningún OA coincide con el filtro.</div>';
+  cont.querySelectorAll('.oa').forEach(btn => btn.addEventListener('click', () => {
+    const o = btn.dataset.oa;
+    h._sel.has(o) ? h._sel.delete(o) : h._sel.add(o);
+    btn.classList.toggle('on'); btn.setAttribute('aria-pressed', h._sel.has(o));
+    valorOAMulti(h); actualizarVista();
+  }));
+  if (!filtro._ok){ filtro._ok = true; filtro.addEventListener('input', () => pintarOAMulti(h, h._lista || [])); }
+  const extra = document.querySelector(`[data-extra-para="${h.id}"]`);
+  if (!extra._ok){ extra._ok = true; extra.addEventListener('input', () => { valorOAMulti(h); actualizarVista(); }); }
+  valorOAMulti(h);
+}
+function valorOAMulti(h){
+  const orden = (h._lista || []).filter(o => h._sel.has(o));
+  const extra = (document.querySelector(`[data-extra-para="${h.id}"]`) || {}).value || '';
+  h.value = [...orden, extra.trim()].filter(Boolean).join('; ');
+  const n = orden.length, c = document.querySelector(`[data-cont-para="${h.id}"]`);
+  if (c) c.textContent = n ? `${n} OA seleccionado${n > 1 ? 's' : ''}` : '';
 }
 function cambioCurricular(s){
   if (s.value === OTRO){
